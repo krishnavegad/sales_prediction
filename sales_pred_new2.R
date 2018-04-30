@@ -1,0 +1,234 @@
+setwd("E:\\project\\bigmart_sales\\Bigmart_Sales_Prediction")
+
+#reading the datasets
+train = read.csv('Train_UWu5bXk.csv')
+test = read.csv('Test_u94Q5KV.csv')
+
+#adding source columns
+train$source = "train"
+test$source  = "test"
+test$Item_Outlet_Sales = 0
+
+#merging the datasets
+data = rbind(train, test)
+
+#data exploration
+summary(data)
+str(data)
+
+#data cleaning
+#replacing_missing values
+data$Item_Weight = ifelse(is.na(data$Item_Weight), 
+                          ave(data$Item_Weight, FUN = function(x) mean(x, na.rm = TRUE)),
+                          data$Item_Weight)
+data$Item_Visibility = ifelse(data$Item_Visibility==0, 
+                          ave(data$Item_Visibility, FUN = function(x) mean(x)),
+                          data$Item_Visibility)
+
+# write.csv(data,"dataset.csv")
+# view(data)
+# 
+# #data = data["Outlet_Size"]
+# #rough calculation of mode
+# A = data$Outlet_Size
+# 
+# K = data[,c("Outlet_Size","Outlet_Type")]
+# supermarket = K[K$Outlet_Type == "Supermarket Type1",]
+# mode_Supermarket = names(table(supermarket$Outlet_Size))[which.max(table(supermarket$Outlet_Size))]
+# 
+# 
+# supermarket2 = K[K$Outlet_Type == "Supermarket Type2",]
+# mode_Supermarket2 = names(table(supermarket2$Outlet_Size))[which.max(table(supermarket2$Outlet_Size))] 
+# 
+# supermarket3 = K[K$Outlet_Type == "Supermarket Type3",]
+# mode_Supermarket3 = names(table(supermarket3$Outlet_Size))[which.max(table(supermarket3$Outlet_Size))]
+# 
+# grocery = K[K$Outlet_Type == "Grocery Store",]
+# mode_grocery = names(table(grocery$Outlet_Size))[which.max(table(grocery$Outlet_Size))]
+# if(mode_grocery == ""){
+#   mode_grocery = "Small"
+# }
+
+data = read.csv("dataset2.csv")
+data$Small = NULL
+#creating new item type column
+x = str_sub(data$Item_Identifier,1,2)
+table(x)
+
+y = gsub("FD","food",x)
+z = gsub("DR","drinks",y)
+a = gsub("NC","non-consumables",z)
+
+data$Item_Type_Combined = a
+
+#determining the number of years
+data$Outlet_Years = 2013-data$Outlet_Establishment_Year
+
+#correcting the Item fat content
+data$Item_Fat_Content = gsub("LF","Low Fat",data$Item_Fat_Content)
+data$Item_Fat_Content = gsub("reg","Regular",data$Item_Fat_Content)
+data$Item_Fat_Content = gsub("low fat","Low Fat",data$Item_Fat_Content)
+ 
+#removing unwanted rows
+data$Item_Type = NULL
+data$Outlet_Establishment_Year = NULL
+
+#taking care of the categorical variables
+data$Item_Fat_Content = factor(data$Item_Fat_Content,
+                         levels = c('Low Fat', 'Regular'),
+                         labels = c(0, 1))
+
+data$Outlet_Size = factor(data$Outlet_Size,
+                               levels = c('Medium', 'Small','High'),
+                               labels = c(1, 0,2))
+
+data$Outlet_Location_Type = factor(data$Outlet_Location_Type,
+                          levels = c('Tier 1', 'Tier 2','Tier 3'),
+                          labels = c(1, 2,3))
+
+data$Outlet_Type = factor(data$Outlet_Type,
+                                   levels = c('Grocery Store', 'Supermarket Type1',
+                                              'Supermarket Type2','Supermarket Type3'),
+                                   labels = c(0,1,2,3))
+
+data$Item_Type_Combined = factor(data$Item_Type_Combined,
+                          levels = c('food', 'drinks','non-consumables'),
+                          labels = c(0,1,2))
+
+
+#splitting the datasets back into test set and train set
+test = subset(data,data$source=="test")
+train = subset(data,data$source=="train")
+
+#exporting the new csv files for the train and the test sets
+write.csv(test,'test_file.csv')
+write.csv(train,'train_file.csv')
+
+
+#Multiple linear regression model
+regressor1 = lm (formula = Item_Outlet_Sales ~ Item_Fat_Content +
+                   Item_Type_Combined + Item_Visibility + Item_MRP + 
+                   Outlet_Years + Outlet_Type + Outlet_Location_Type,
+                   data = train )
+
+regressor1 = lm (formula = Item_Outlet_Sales ~ Item_Fat_Content +
+                   Item_Type_Combined + Item_Visibility + Item_MRP + 
+                   Outlet_Years + Outlet_Type,
+                 data = train )
+summary(regressor1)
+
+regressor1 = lm (formula = Item_Outlet_Sales ~ Item_Fat_Content +
+                 Item_Visibility + Item_MRP + 
+                 Outlet_Years + Outlet_Type,
+                 data = train )
+summary(regressor1)
+
+regressor1 = lm (formula = Item_Outlet_Sales ~ Item_Fat_Content +
+                   Item_MRP + Outlet_Years + Outlet_Type,
+                   data = train )
+summary(regressor1)
+
+regressor1 = lm (formula = Item_Outlet_Sales ~ Item_Fat_Content +
+                   Item_MRP + Outlet_Type,
+                 data = train )
+summary(regressor1)
+
+sales_pred = predict(regressor1, newdata = train)
+
+# regressor2 = lm (formula = Item_Outlet_Sales ~ Item_Fat_Content +
+#                    Item_MRP + Outlet_Type,
+#                  data = test )
+sales_pred_test = predict(regressor1, newdata = test)
+sales_pred_test
+test$Item_Outlet_Sales = sales_pred_test
+
+#exporting submission file for multiple_linear_regression
+submission_file = test[,c("Item_Identifier","Outlet_Identifier","Item_Outlet_Sales")]
+write.csv(submission_file,"Submission_file1.csv")
+
+
+#plotting the model for test set
+# ggplot() +
+#   geom_point(aes(x = test$Item_Fat_Content, y = test$Item_Outlet_Sales),
+#              colour = 'red') +
+#   geom_line(aes(x = test$Item_Fat_Content, y = sales_pred_test),
+#             colour = 'blue') +
+#   ggtitle('Item Fat Content vs Item Outlet Sales') +
+#   xlab('Item Fat Content') +
+#   ylab('Item Outlet Sales')
+
+#Decision Tree Model
+#nstall.packages('rpart')
+
+regressor2 = rpart(formula = Item_Outlet_Sales ~Item_Fat_Content +
+                     Item_MRP + Outlet_Type, 
+                   data = train, 
+                   control = rpart.control(minsplit = 10))
+sales_pred_tree = predict(regressor2, newdata = train)
+
+sales_pred_tree = predict(regressor2, newdata = test)
+
+#exporting submission file for decision tree regression
+test$Item_Outlet_Sales = sales_pred_tree
+submission_file = test[,c("Item_Identifier","Outlet_Identifier","Item_Outlet_Sales")]
+write.csv(submission_file,"Submission_file2.csv")
+
+#trial plot for decision tree
+#plot(regressor2)
+
+#Random_forest Model
+#install.packages('randomForest')
+regressor3 = randomForest(Item_Outlet_Sales ~ Item_Fat_Content +
+                            Item_MRP + Outlet_Type, data = train,
+                          ntree = 1500)
+#summary(regressor3)
+sales_pred_tree_2 = predict(regressor3, newdata = test)
+
+
+#exporting submission file for decision tree regression
+test$Item_Outlet_Sales = sales_pred_tree
+submission_file = test[,c("Item_Identifier","Outlet_Identifier","Item_Outlet_Sales")]
+write.csv(submission_file,"Submission_file3.csv")
+#plot(regressor3)
+
+# install.packages("corrplot")
+# library(car)
+# library(corrplot) # We'll use corrplot later on in this example too.
+# library(visreg) # This library will allow us to show multivariate graphs.
+# library(rgl)
+# library(knitr)
+# library(scatterplot3d)
+# install.packages("car")
+# install.packages("visreg")
+# install.packages("rgl")
+# install.packages("scatterplot3d")
+
+head(data,5)
+str(data)
+summary(data)
+newdata = data[,c(1:4)]
+summary(newdata)
+plot(newdata, pch=16, col="blue", main="Matrix Scatterplot of Income, Education, Women and Prestige")
+
+
+
+# sales_pred_tree
+# test$Item_Fat_Content
+write.csv(sales_pred_tree,"sales_prediction_1.csv")
+
+#data for visualization
+new_df = test[,c(3,5,9)]
+new_df$Item_Outlet_Sales = sales_pred_tree
+write.csv(new_df,"sales_prediction_1.csv", row.names = FALSE)
+
+#visualisation test
+barplot(new_df, height = new_df$Item_Outlet_Sales , main="Decision_Tree")
+?barplot
+p<-ggplot(data=new_df, aes(x=Outlet_Type, y=Item_Outlet_Sales)) +
+  geom_bar(stat="identity")
+
+p
+
+
+
+
